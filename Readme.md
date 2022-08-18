@@ -74,6 +74,9 @@ The "recipe" how to install a package is persisted and updates are basically rei
       get called once per specified argument instead of with all arguments?
 - `--install-yep-extensions`: will put symlinks to any executable files matching `(type|command|from)_*` in the package
   folder into the extension folder (see below).
+- `--nodejs=[<package-name> <-] <name> [-> <file>]`: Installs a node package via npm into the package folder, using 
+  `package-name` (fallback: `name`), adds a wrapper script into the binaries folder which sets `NODE_PATH` (?) and then
+  calls `file` (fallback: `name`). (Similar things for python-pip/...)
 - (Probably more, e.g. install man files or zsh completions)
 
 TODO: think about how to overwrite/extend stuff from the template/default type: I can see both "overwrite it" (e.g. the
