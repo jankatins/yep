@@ -56,15 +56,17 @@ The "recipe" how to install a package is persisted and updates are basically rei
 
 - `--id-as <name>`: the name of the package in the packages folder; defaults to something derived from the given
   url/package/repo slug by some magic conversion (todo: define it...)
-- `--from='{gh-r,gh,gl-r,gl,clone,download}'`: uses the appropriate download method to download, maybe extract and
+- `--from='{gh-r,gh,gl-r,gl,clone,download,nodejs}'`: uses the appropriate download method to download, maybe extract and
   finally fill a folder; can only be given once
 - `--dl-pick=<regex>`/ `--dl-pick-os=<regex>`/ `--dl-pick-os-arch=<regex>`: influences the file which is picked by the
   download step
+- `--dl-nodejs-package="<package-name>[,<package-name>]"`: Installs a/multiple node package(s) via npm into the package folder, using 
+  `package-name` (fallback: `name`)
 - `--dl-version=<str>`: the version to download, defaults to "latest release/HEAD" if not given
 - `--mv='<regex>-><name>'`: move a file after extracting it; both parts relative to the package folder
 - `--ln='<regex>-><name>'`: symlink a file after extracting it; both parts relative to the package folder
 - `--exec=<command to exec>`: executes the given command in the folder
-- `--install-link='<regex>-><name>'`: Symlinks the file specified by the first part in the package folder into the given
+- `--install-link='<regex>-><name>'`: Symlinks the file specified by the first part in the package folder into the configured
   binaries folder; first part is relative to the package folder, second part is either relative to the binaries folder
   or absolute; if first part matches more than one file, will all symlink them (if a second part is given as a file,
   will error); if second part is given and ends in a slash (=folder), will add the symlink under the same name in that
@@ -74,9 +76,8 @@ The "recipe" how to install a package is persisted and updates are basically rei
       get called once per specified argument instead of with all arguments?
 - `--install-yep-extensions`: will put symlinks to any executable files matching `(type|command|from)_*` in the package
   folder into the extension folder (see below).
-- `--nodejs=[<package-name> <-] <name> [-> <file>]`: Installs a node package via npm into the package folder, using 
-  `package-name` (fallback: `name`), adds a wrapper script into the binaries folder which sets `NODE_PATH` (?) and then
-  calls `file` (fallback: `name`). (Similar things for python-pip/...)
+- `--install-shell-wrapper-node="<path/to/binary> [-> <name>]`: Install a shell script which wraps a node.js installation 
+  into the configured binaries folder as `name` (fallback: filename of `<path/to/binary>`) ; (Similar things for python-pip/...)
 - (Probably more, e.g. install man files or zsh completions)
 
 TODO: think about how to overwrite/extend stuff from the template/default type: I can see both "overwrite it" (e.g. the
@@ -94,16 +95,20 @@ Three cases:
   defaults: `$HOME/.local/yep/extensions/type_<type name>`:
   calling it with the `<source>` will output default options which are inserted into the start of the original
   cli: e.g.
-    - `yep cli/cli`  will use the default `static-binary` and
+    - `yep install cli/cli`  will use the default `static-binary` and
       calls `$HOME/.local/yep/packages/yep/yep type_static-binary cli/cli` (after checking that there is
       no `$HOME/.local/yep/extensions/type_static-binary`) which then outputs `--from='gh-r' --install-link` which
       downloads the latest release from github and symlinks all executables in the root folder of the resulting package
       folder.
-    - `yep whatever --type=rust` calls `$HOME/.local/yep/extensions/type_rust whatever` which might return something
+    - `yep install whatever --type=rust` calls `$HOME/.local/yep/extensions/type_rust whatever` which might return something
       like `--from='rust' --install-link='bin/whatever -> whatever'` which then
       might install rust into the folder and then use cargo in that folder to install the
       `whatever` package and finally symlink the installed package into the binary folder
-    - `yep org/repo --type=make` calls `$HOME/.local/yep/extensions/type_make org/repo` which
+    - `yep install whatever --type=nodejs` calls `$HOME/.local/yep/extensions/type_nodejs whatever` which might 
+      return something like `--from='nodejs' --install-shell-wrapper-node='node_module/.bin/whatever -> whatever'` which
+      then might install nodejs into the folder, use that nodejs to install the `whatever` package and finally create 
+      a shells cript wrapper arround `node_module/.bin/whatever` package into the binary folder.
+    - `yep install org/repo --type=make` calls `$HOME/.local/yep/extensions/type_make org/repo` which
       might return `--from='gh' --exec='make install DESTDIR=%PACKAGEFOLDER% --install-link` which clones the org/repo
       from github, runs the specified make command and finally symlinks all executable files in the root folder of the
       package into the binary folder.
