@@ -2,24 +2,31 @@
 
 [THIS IS AN IDEA, written down to see if it has any merits and looks sane... Comments welcome!]
 
-Install and update command line apps in your $HOME folder.
+Install and update command line apps in your $HOME folder. 
 
-Installing a package is a two-step process:
+Good for maintaining local cli commands, which you want to update regularly to the latest version available in the upstream release page/repo. Gives you the flexibility to install whatever you want. Minimizes the hassle of keeping them updated.
 
-1. Getting the content of the package to the local disk, e.g., downloading and extracting a release zip or cloning a
-   repository into a "package" folder
-2. Doing something with content, e.g., renaming a file in the package folder or symlinking a binary into $PATH or
+## Overview
+
+Installing a package is a three-step process:
+
+1. Expanding the given "recipe" with some defaults. Depends on the given `--type=xx` (Default: downloading from a 
+   github release page and installing as a static binary). This basically makes a minimal example 
+   `yep install cli/cli` do the right thing without removing flexibility.  
+3. Getting the content of the package to the local disk, e.g., downloading and extracting a release zip or cloning a
+   repository into a "package" folder or installing via rust/cargo.
+3. Doing something with content, e.g., renaming a file in the package folder or symlinking a binary into $PATH or
    executing a Makefile in the folder to install the package
 
 The "recipe" how to install a package is persisted and updates are basically reinstalls.
 
 - Build in rust, just to learn the language
-- Inspired by zinit and how the download/install stuff
-- extendable: add more arguments to influence what to do with package content or write a new source to get packages from
-- explicit: only the simplest (single cli command in a github release for the os+arch) case is covered by the defaults
-- smart enough: figuring out what to download and what to expose in the `$PATH` is build in
-- flexible: the arguments describe how to "install" a package
-- depends on other cli commands, e.g. for extraction of downloaded files or git
+- Inspired by [zinit](https://github.com/zdharma-continuum/zinit) and how the download/install stuff works
+- Extendable: add more arguments to influence what to do with package content or write a new source to get packages from
+- Explicit: only the simplest (single cli command in a github release for the os+arch) case is covered by the defaults
+- Smart enough: figuring out what to download and what to expose in the `$PATH` is build in
+- Flexible: the arguments describe how to "install" a package
+- Depends on other cli commands, e.g. for extraction of downloaded files or git
 
 ## Features in the happy path
 
@@ -55,24 +62,28 @@ The "recipe" how to install a package is persisted and updates are basically rei
   to that point
 
 - `--id-as <name>`: the name of the package in the packages folder; defaults to something derived from the given
-  url/package/repo slug by some magic conversion (todo: define it...)
+  url/package/repo slug by some magic conversion (todo: define it...); Can only be given once.
 - `--from='{gh-r,gh,gl-r,gl,clone,download,nodejs}'`: uses the appropriate download method to download, maybe extract and
-  finally fill a folder; can only be given once
+  finally fill a folder; can only be given once; Latest given argument wins.
 - `--dl-pick=<regex>`/ `--dl-pick-os=<regex>`/ `--dl-pick-os-arch=<regex>`: influences the file which is picked by the
   download step
 - `--dl-nodejs-package="<package-name>[,<package-name>]"`: Installs a/multiple node package(s) via npm into the package folder, using 
   `package-name` (fallback: `name`)
-- `--dl-version=<str>`: the version to download, defaults to "latest release/HEAD" if not given
-- `--mv='<regex>-><name>'`: move a file after extracting it; both parts relative to the package folder
-- `--ln='<regex>-><name>'`: symlink a file after extracting it; both parts relative to the package folder
-- `--exec=<command to exec>`: executes the given command in the folder
+- `--dl-version=<str>`: the version to download, defaults to "latest release/HEAD" if not given; Can only be given once.
+- `--mv='<regex>-><name>'`: move a file after extracting it; both parts relative to the package folder; Explicit arguments overwrite
+   default ones; can be given multiple times.
+- `--ln='<regex>-><name>'`: symlink a file after extracting it; both parts relative to the package folder; Explicit arguments
+   overwrite default ones; can be given multiple times.
+- `--exec=<command to exec>`: executes the given command in the folder; Explicit arguments overwrite default ones; can be given 
+  multiple times.
 - `--install-link='<regex>-><name>'`: Symlinks the file specified by the first part in the package folder into the configured
   binaries folder; first part is relative to the package folder, second part is either relative to the binaries folder
   or absolute; if first part matches more than one file, will all symlink them (if a second part is given as a file,
   will error); if second part is given and ends in a slash (=folder), will add the symlink under the same name in that
-  folder. If nothing is given, will symlink all executable files in the root folder of the package under the same name.
+  folder. If nothing is given, will symlink all executable files in the root folder of the package under the same name. Explicit 
+  arguments overwrite default ones; can be given multiple times.
     - TODO: maybe make the default collect all executable files and add a `--install-link=!...`
-      or `--no-install-link=<regex>` variant which excludes files again? But how would that work with extensions hwihc
+      or `--no-install-link=<regex>` variant which excludes files again? But how would that work with extensions which
       get called once per specified argument instead of with all arguments?
 - `--install-yep-extensions`: will put symlinks to any executable files matching `(type|command|from)_*` in the package
   folder into the extension folder (see below).
