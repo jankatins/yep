@@ -2,7 +2,7 @@
 name = "yep"
 version = "0.0.2"
 edition = "2021"
-license = "MIT License"
+license = "MIT"
 authors = ["Jan Katins <jasc@gmx.net>"]
 description = "yet another package manager for local cli commands"
 documentation = "https://docs.rs/yep"
