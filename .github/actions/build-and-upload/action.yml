@@ -1,0 +1,172 @@
+name: 'build and upload'
+description: 'Builds release artefacts, sanity checks them and uploads them as artifact and, if a release, as release assets'
+
+inputs:
+  target:
+    required: true
+    description: 'rust target'
+  use-cross:
+    required: true
+    description: 'Use cross to build the binary'
+  os:
+    required: true
+    description: 'OS to use to build the binary'
+  upload_url:
+    required: false
+    description: 'The release url to additionally upload the binary'
+  release_upload_token:
+    required: false
+    description: 'Only needed when uploading to a release -- use secrets.GITHUB_TOKEN'
+  release_tag_name:
+     required: false
+     description: 'Only needed when uploading to a release'
+outputs: {}
+runs:
+  using: 'composite'
+  steps:
+    - name: Install prerequisites
+      shell: bash
+      run: |
+        case ${{ inputs.target }} in
+          arm-unknown-linux-*) sudo apt-get -y update ; sudo apt-get -y install gcc-arm-linux-gnueabihf ;;
+          aarch64-unknown-linux-gnu) sudo apt-get -y update ; sudo apt-get -y install gcc-aarch64-linux-gnu ;;
+        esac
+    - name: Extract crate information
+      shell: bash
+      run: |
+        echo "PROJECT_NAME=$(sed -n 's/^name = "\(.*\)"/\1/p' Cargo.toml | head -n1)" >> $GITHUB_ENV
+        echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)" >> $GITHUB_ENV
+        echo "PROJECT_MAINTAINER=$(sed -n 's/^authors = \["\(.*\)"\]/\1/p' Cargo.toml)" >> $GITHUB_ENV
+        echo "PROJECT_HOMEPAGE=$(sed -n 's/^homepage = "\(.*\)"/\1/p' Cargo.toml)" >> $GITHUB_ENV
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ inputs.target }}
+        override: true
+        profile: minimal # minimal component installation (ie, no documentation)
+
+    - name: Show version information (Rust, cargo, GCC)
+      shell: bash
+      run: |
+        gcc --version || true
+        rustup -V
+        rustup toolchain list
+        rustup default
+        cargo -V
+        rustc -V
+    - name: Build
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: ${{ inputs.use-cross }}
+        command: build
+        args: --locked --release --target=${{ inputs.target }}
+
+    - name: Strip debug information from executable
+      id: strip
+      shell: bash
+      run: |
+        # Figure out suffix of binary
+        EXE_suffix=""
+        case ${{ inputs.target }} in
+          *-pc-windows-*) EXE_suffix=".exe" ;;
+        esac;
+        # Figure out what strip tool to use if any
+        STRIP="strip"
+        case ${{ inputs.target }} in
+          arm-unknown-linux-*) STRIP="arm-linux-gnueabihf-strip" ;;
+          aarch64-unknown-linux-gnu) STRIP="aarch64-linux-gnu-strip" ;;
+          *-pc-windows-msvc) STRIP="" ;;
+        esac;
+        # Setup paths
+        BIN_DIR="_cicd-intermediates/stripped-release-bin/"
+        mkdir -p "${BIN_DIR}"
+        BIN_NAME="${{ env.PROJECT_NAME }}${EXE_suffix}"
+        BIN_PATH="${BIN_DIR}/${BIN_NAME}"
+        # Copy the release build binary to the result location
+        cp "target/${{ inputs.target }}/release/${BIN_NAME}" "${BIN_DIR}"
+        # Also strip if possible
+        if [ -n "${STRIP}" ]; then
+          "${STRIP}" "${BIN_PATH}"
+        fi
+        # Let subsequent steps know where to find the (stripped) bin
+        echo ::set-output name=BIN_PATH::${BIN_PATH}
+        echo ::set-output name=BIN_NAME::${BIN_NAME}
+    - name: Set testing options
+      id: test-options
+      shell: bash
+      run: |
+        # test only library unit tests and binary for arm-type targets
+        unset CARGO_TEST_OPTIONS
+        unset CARGO_TEST_OPTIONS ; case ${{ inputs.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--bin ${PROJECT_NAME}" ;; esac;
+        echo ::set-output name=CARGO_TEST_OPTIONS::${CARGO_TEST_OPTIONS}
+    - name: Run tests
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: ${{ inputs.use-cross }}
+        command: test
+        args: --locked --target=${{ inputs.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
+
+    - name: Run yep --version
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: ${{ inputs.use-cross }}
+        command: run
+        args: --locked --target=${{ inputs.target }} -- --version
+
+    # TODO: add proper sanity checks here
+
+    - name: Create tarball
+      id: package
+      shell: bash
+      run: |
+        PKG_suffix=".tar.gz" ; case ${{ inputs.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
+        PKG_BASENAME=${PROJECT_NAME}-v${PROJECT_VERSION}-${{ inputs.target }}
+        PKG_NAME=${PKG_BASENAME}${PKG_suffix}
+        echo ::set-output name=PKG_NAME::${PKG_NAME}
+        PKG_STAGING="_cicd-intermediates/package"
+        ARCHIVE_DIR="${PKG_STAGING}/${PKG_BASENAME}/"
+        mkdir -p "${ARCHIVE_DIR}"
+        mkdir -p "${ARCHIVE_DIR}/autocomplete"
+        # Binary
+        cp "${{ steps.strip.outputs.BIN_PATH }}" "$ARCHIVE_DIR"
+        # Man page
+        #cp 'target/${{ inputs.target }}/release/build/${{ env.PROJECT_NAME }}'-*/out/assets/manual/bat.1 "$ARCHIVE_DIR"
+        # README, LICENSE and CHANGELOG files
+        cp "README.md" "LICENSE" "CHANGELOG.md" "$ARCHIVE_DIR"
+        # Autocompletion files
+        #cp 'target/${{ inputs.target }}/release/build/${{ env.PROJECT_NAME }}'-*/out/assets/completions/bat.bash "$ARCHIVE_DIR/autocomplete/${{ env.PROJECT_NAME }}.bash"
+        #cp 'target/${{ inputs.target }}/release/build/${{ env.PROJECT_NAME }}'-*/out/assets/completions/bat.fish "$ARCHIVE_DIR/autocomplete/${{ env.PROJECT_NAME }}.fish"
+        #cp 'target/${{ inputs.target }}/release/build/${{ env.PROJECT_NAME }}'-*/out/assets/completions/_bat.ps1 "$ARCHIVE_DIR/autocomplete/_${{ env.PROJECT_NAME }}.ps1"
+        #cp 'target/${{ inputs.target }}/release/build/${{ env.PROJECT_NAME }}'-*/out/assets/completions/bat.zsh "$ARCHIVE_DIR/autocomplete/${{ env.PROJECT_NAME }}.zsh"
+        # base compressed package
+        pushd "${PKG_STAGING}/" >/dev/null
+        case ${{ inputs.target }} in
+          *-pc-windows-*) 7z -y a "${PKG_NAME}" "${PKG_BASENAME}"/* | tail -2 ;;
+          *) tar czf "${PKG_NAME}" "${PKG_BASENAME}"/* ;;
+        esac;
+        popd >/dev/null
+        if [[ "$RUNNER_OS" == 'Windows' ]]; then
+          certutil -hashfile ${PKG_STAGING}/${PKG_NAME} sha256 | grep -E '[A-Fa-f0-9]{64}' > ${PKG_STAGING}/${PKG_NAME}.sha256
+        else
+          shasum -a 256 ${PKG_STAGING}/${PKG_NAME} > ${PKG_STAGING}/${PKG_NAME}.sha256
+        fi
+        # Let subsequent steps know where to find the compressed package
+        echo ::set-output name=PKG_PATH::"${PKG_STAGING}/${PKG_NAME}"
+    - name: Upload Artifact"
+      uses: actions/upload-artifact@master
+      with:
+        name: ${{ steps.package.outputs.PKG_NAME }}
+        path: ${{ steps.package.outputs.PKG_PATH }}
+
+    - name: Publish archives and packages
+      uses: softprops/action-gh-release@v1
+      if: inputs.release_upload_token
+      with:
+        tag_name: ${{ inputs.release_tag_name }}
+        files: |
+          ${{ steps.package.outputs.PKG_PATH }}
+          ${{ steps.package.outputs.PKG_PATH }}.sha256
+        draft: true
+      env:
+        GITHUB_TOKEN: ${{ inputs.release_upload_token }}

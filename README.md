@@ -162,3 +162,7 @@ step.
 1. Downloads the appropriate os+arch file from the latest release from github
 2. Extract the file and makes ripgrep executable
 3. Creates a symlink to the ripgrep binary as  `$HOME/.local/bin/ripgrep`
+## License
+This project is proudly licensed under the MIT license (LICENSE or http://opensource.org/licenses/MIT).
+
+yep can be distributed according to the MIT license. Contributions will be accepted under the same license.

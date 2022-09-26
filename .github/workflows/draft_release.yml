@@ -1,0 +1,95 @@
+name: Draft a release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version number (e.g. 1.2.3) OR one of patch, minor, major (see https://github.com/wraithan/cargo-bump)'
+        required: true
+        default: 'patch'
+
+jobs:
+  draft-release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.updated_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Stable with rustfmt and clippy
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: cargo
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-bump
+          version: latest
+      - name: Update version
+        id: updated_version
+        shell: bash
+        run: |
+          cargo bump ${{ github.event.inputs.version }}
+          # Needed to also bump Cargo.lock, which would otherwise result in failed builds when building the commit
+          cargo check
+          version=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[0].version')
+          echo ::set-output name="version::$version"
+      - name: Update changelog
+        id: changelog
+        shell: bash
+        run: |
+          pip3 install python-kacl
+          kacl-cli release ${{ steps.updated_version.outputs.version }} --modify --auto-link
+          echo "" >> CHANGELOG.md
+          body=$(kacl-cli get ${{ steps.updated_version.outputs.version }})
+          body="${body//'%'/'%25'}"
+          body="${body//$'\n'/'%0A'}"
+          body="${body//$'\r'/'%0D'}"
+          echo ::set-output name="body::$body"
+      - name: Commit and tag changes
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: 'CHANGELOG.md Cargo.toml Cargo.lock'
+          message: 'Release ${{ steps.updated_version.outputs.version }}'
+          tag: '${{ steps.updated_version.outputs.version }}'
+      - name: Create a draft release
+        id: release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.updated_version.outputs.version }}
+          name: Release ${{ steps.updated_version.outputs.version }}
+          body: ${{ steps.changelog.outputs.body }}
+          draft: true
+
+  build-release:
+    name: build-release
+    needs: ['draft-release']
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { target: aarch64-unknown-linux-gnu   , os: ubuntu-20.04, use-cross: true }
+          - { target: arm-unknown-linux-gnueabihf , os: ubuntu-20.04, use-cross: true }
+          - { target: arm-unknown-linux-musleabihf, os: ubuntu-20.04, use-cross: true }
+          - { target: i686-pc-windows-msvc        , os: windows-2019 }
+          - { target: i686-unknown-linux-gnu      , os: ubuntu-20.04, use-cross: true }
+          - { target: i686-unknown-linux-musl     , os: ubuntu-20.04, use-cross: true }
+          - { target: x86_64-apple-darwin         , os: macos-10.15 }
+          - { target: x86_64-pc-windows-gnu       , os: windows-2019 }
+          - { target: x86_64-pc-windows-msvc      , os: windows-2019 }
+          - { target: x86_64-unknown-linux-gnu    , os: ubuntu-20.04, use-cross: true }
+          - { target: x86_64-unknown-linux-musl   , os: ubuntu-20.04, use-cross: true }
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+      - uses: ./.github/actions/build-and-upload
+        with:
+          target: ${{ matrix.job.target }}
+          os: ${{ matrix.job.os }}
+          use-cross: ${{ matrix.job.use-cross }}
+          # Needed for softprops/action-gh-release to upload to the same release
+          release_upload_token: ${{ secrets.GITHUB_TOKEN }}
+          release_tag_name: ${{ needs.draft-release.outputs.tag_name }}
