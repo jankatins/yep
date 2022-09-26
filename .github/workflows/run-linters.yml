@@ -27,3 +27,13 @@ jobs:
       - uses: actions/checkout@v2
       - name: Fail if .rej files exist as structure update was not successful
         run: test -z "$(find . -iname '*.rej')"
+
+  lint-changelog:
+    name: Check if the changelog is valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Fail if the changelog cannot be parsed
+        run: |
+          pip3 install python-kacl
+          kacl-cli verify
