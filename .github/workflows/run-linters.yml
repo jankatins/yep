@@ -1,0 +1,29 @@
+name: Static Linters
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download actionlint
+        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+        shell: bash
+      - name: Check workflow files
+        # SC2129: don't care if we redirect multipel times to the same file
+        # SC2086: Double quote to prevent globbing and word splitting
+        run: ./actionlint -color -ignore 'SC2129:' -ignore 'SC2086'
+        shell: bash
+
+  lint-cruft:
+    name: Check if automatic project update was successful
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Fail if .rej files exist as structure update was not successful
+        run: test -z "$(find . -iname '*.rej')"
