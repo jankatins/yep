@@ -14,7 +14,7 @@ jobs:
     outputs:
       tag_name: ${{ steps.updated_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Stable with rustfmt and clippy
         uses: actions-rs/toolchain@v1
         with:
@@ -84,7 +84,7 @@ jobs:
           - { target: x86_64-unknown-linux-musl   , os: ubuntu-20.04, use-cross: true }
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - uses: ./.github/actions/build-and-upload
         with:
           target: ${{ matrix.job.target }}

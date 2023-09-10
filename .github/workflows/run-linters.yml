@@ -10,7 +10,7 @@ jobs:
   lint-actions:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download actionlint
         run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
         shell: bash
@@ -24,7 +24,7 @@ jobs:
     name: Check if automatic project update was successful
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Fail if .rej files exist as structure update was not successful
         run: test -z "$(find . -iname '*.rej')"
 
@@ -32,7 +32,7 @@ jobs:
     name: Check if the changelog is valid
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Fail if the changelog cannot be parsed
         run: |
           pip3 install python-kacl
