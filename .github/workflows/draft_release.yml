@@ -47,7 +47,7 @@ jobs:
           body="${body//$'\r'/'%0D'}"
           echo ::set-output name="body::$body"
       - name: Commit and tag changes
-        uses: EndBug/add-and-commit@v9
+        uses: EndBug/add-and-commit@v11
         with:
           add: 'CHANGELOG.md Cargo.toml Cargo.lock'
           message: 'Release ${{ steps.updated_version.outputs.version }}'
